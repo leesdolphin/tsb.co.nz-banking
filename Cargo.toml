@@ -1,0 +1,8 @@
+[package]
+name = "tsb-nz-banking"
+version = "0.1.0"
+authors = ["Opal Symes <code@opal.codes>"]
+
+[dependencies]
+hyper = "0.12"
+url = "1.7.1"
