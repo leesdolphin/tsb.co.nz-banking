@@ -4,5 +4,9 @@ version = "0.1.0"
 authors = ["Opal Symes <code@opal.codes>"]
 
 [dependencies]
-hyper = "0.12"
-url = "1.7.1"
+reqwest = "0.8.8"
+url = "*"
+cookie = "*"
+html5ever = "*"
+failure = "*"
+failure_derive = "*"
