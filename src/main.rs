@@ -14,8 +14,8 @@ mod login;
 use login::TsbContainer;
 
 fn main() -> Result<(), Error> {
-    let mut container = TsbContainer::load_creds()?;
-    let _seq = container.do_login()?;
+  let mut container = TsbContainer::load_creds()?;
+  let _seq = container.do_login()?;
 
-    Ok(())
+  Ok(())
 }
