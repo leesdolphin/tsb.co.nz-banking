@@ -1,12 +1,12 @@
-use std::borrow::Borrow;
 use std::io::Error;
-use std::slice::Iter;
 
 use html5ever::driver::ParseOpts;
 use html5ever::parse_document;
 use html5ever::rcdom::{Handle, NodeData, RcDom};
 use html5ever::tendril::TendrilSink;
 use html5ever::tree_builder::TreeBuilderOpts;
+
+use std::collections::VecDeque;
 
 pub enum FormElement {
   Input {
@@ -16,43 +16,52 @@ pub enum FormElement {
   },
 }
 
-pub struct IterNodes<'a> {
-  start: Option<&'a Handle>,
-  tree: Vec<&'a mut Iter<'a, Handle>>,
+pub struct IterNodes {
+  to_explore: VecDeque<Handle>,
 }
 
-impl<'a> IterNodes<'a> {
-  pub fn from(node: &'a Handle) -> Self {
+impl IterNodes {
+  pub fn from(node: &Handle) -> Self {
+    let mut to_explore: VecDeque<Handle> = VecDeque::new();
+    to_explore.push_front(node.clone());
     IterNodes {
-      start: Some(node),
-      tree: vec![],
+      to_explore: to_explore,
     }
   }
-
-  fn descend_node(&mut self, node: &'a Handle) {
-    // self.tree.push(node.children.borrow().iter());
-  }
 }
 
-impl<'a> Iterator for IterNodes<'a> {
-  type Item = &'a Handle;
+impl Iterator for IterNodes {
+  type Item = Handle;
   fn next(&mut self) -> Option<Self::Item> {
-    if let Some(node) = self.start {
-      self.descend_node(node);
-      self.start = None;
+    let te = &mut self.to_explore;
+    if let Some(node) = te.pop_front() {
+      {
+        let children = node.children.borrow();
+        for i in 0..children.len() {
+          if let Some(node) = children.get(i) {
+            te.insert(i, node.clone());
+          }
+        }
+      }
       Some(node)
     } else {
-      match self.tree.last() {
-        Some(mut iter) => match iter.next() {
-          Some(node) => return Some(node),
-          None => {}
-        },
-        None => return None,
-      }
-      self.tree.pop();
-      self.next()
+      None
     }
   }
+}
+
+pub fn get_text_content(node: &Handle) -> String {
+  let mut r = "".to_owned();
+  for node in IterNodes::from(node) {
+    match node.data {
+      NodeData::Text { ref contents } => {
+        r.push(' ');
+        r.push_str(&contents.borrow().to_string().trim());
+      }
+      _ => {}
+    }
+  }
+  r.trim()
 }
 
 pub fn get_attr(node: &Handle, name: &str) -> Option<String> {
@@ -82,12 +91,12 @@ pub fn get_node_name(node: &Handle) -> Option<String> {
 pub fn find_inputs(node: &Handle) -> Vec<FormElement> {
   let mut r: Vec<FormElement> = vec![];
   for node in IterNodes::from(node) {
-    match get_node_name(node) {
+    match get_node_name(&node) {
       Some(node_name) => match node_name.as_str() {
         "input" => {
-          let mut a_name: Option<String> = get_attr(node, "name");
-          let mut a_id: Option<String> = get_attr(node, "id");
-          let mut a_value: Option<String> = get_attr(node, "value");
+          let mut a_name: Option<String> = get_attr(&node, "name");
+          let mut a_id: Option<String> = get_attr(&node, "id");
+          let mut a_value: Option<String> = get_attr(&node, "value");
           r.push(FormElement::Input {
             name: a_name,
             id: a_id,
@@ -105,10 +114,10 @@ pub fn find_inputs(node: &Handle) -> Vec<FormElement> {
 pub fn find_forms(node: &Handle) -> Vec<Handle> {
   let mut r: Vec<Handle> = vec![];
   for node in IterNodes::from(node) {
-    match get_node_name(node) {
+    match get_node_name(&node) {
       Some(node_name) => match node_name.as_str() {
         "form" => {
-          r.push(node.clone());
+          r.push(node);
         }
         _ => {}
       },

@@ -1,5 +1,6 @@
 use forms::find_forms;
 use forms::get_attr;
+use forms::get_text_content;
 use std::fs::File;
 use std::io::{Error as IoError, Read, Write};
 
@@ -48,14 +49,17 @@ pub struct TsbContainer {
 
 pub struct TsbLoggedInUser<'a> {
   c: &'a mut TsbContainer,
-  next_sequence_id: String,
-  customer_number: String,
+  pub next_sequence_id: String,
+  pub customer_number: String,
 }
 
 fn debug_request(text: &String, name: &str) {
-  // let mut file = File::create(format!("text-{}-{}.txt", name, debug_count)).unwrap();
-  // debug_count += 1;
-  // write!(file, "{}", text).unwrap();
+  let count = unsafe {
+    debug_count += 1;
+    debug_count
+  };
+  let mut file = File::create(format!("text-{}-{}.txt", name, count)).unwrap();
+  write!(file, "{}", text).unwrap();
 }
 
 impl TsbContainer {
@@ -90,13 +94,7 @@ impl TsbContainer {
     self
       .jar
       .iter()
-      .filter(|cookie| cookie.secure().unwrap_or(true))
-      .filter(|cookie| {
-        cookie
-          .domain()
-          .unwrap_or(COOKIE_BASE)
-          .ends_with(COOKIE_BASE)
-      }).map(|cookie| (cookie.name().to_owned(), cookie.value().to_owned()))
+      .map(|cookie| (cookie.name().to_owned(), cookie.value().to_owned()))
       .collect()
   }
 
@@ -167,6 +165,16 @@ impl TsbContainer {
     let text = self
       .get_document(|c| c.post(BASE_URL), |r| r.form(&params))
       .map_err(|e| UnableToLogin::ReqwestError(e))?;
+    debug_request(&text, "login");
+    IterNodes::from(&parse_dom(text).map_err(|e| UnableToLogin::InvalidContent(e))?)
+      .filter(|node| {
+        get_attr(node, "class")
+          .unwrap_or_default()
+          .find("error-message")
+          .is_some()
+      }).map(|node| get_text_content(&node))
+      .next()
+      .map_or(Ok(()), |err| Err(UnableToLogin::BadCredentials(err)))?;
 
     let dom = self.get_home()?;
     let next_sequence_id = find_next_sequence_id(&dom)?;
@@ -202,7 +210,7 @@ fn find_customer_number(doc: &Handle) -> Result<String, UnableToLogin> {
     .filter(|elm| match get_node_name(elm) {
       Some(name) => name == "dashboard",
       _ => false,
-    }).filter_map(|elm| get_attr(elm, "customer-number"))
+    }).filter_map(|elm| get_attr(&elm, "customer-number"))
     .next()
     .ok_or(UnableToLogin::MissingCustomerNumber())
     .into()

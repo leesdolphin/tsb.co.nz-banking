@@ -15,7 +15,9 @@ use login::TsbContainer;
 
 fn main() -> Result<(), Error> {
   let mut container = TsbContainer::load_creds()?;
-  let _seq = container.do_login()?;
+  let seq = container.do_login()?;
+
+  println!("{}, {}", seq.next_sequence_id, seq.customer_number);
 
   Ok(())
 }
